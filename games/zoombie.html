@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>僵尸围城 - Jason's Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated; /* 像素风格渲染 */
+        }
+        .pixel-font {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+        .menu-icon {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+
+        .menu-icon:hover {
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .menu-content {
+            display: none;
+            position: fixed;
+            top: 70px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .menu-content.show {
+            display: block;
+        }
+
+        .menu-content a {
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        .menu-content a:hover {
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen">
+    <div class="relative">
+        <canvas id="gameCanvas" width="800" height="600" class="border-4 border-gray-800"></canvas>
+        <div id="ui" class="absolute top-4 left-4 text-white pixel-font">
+            <div id="health" class="mb-2">生命值: 100</div>
+            <div id="ammo" class="mb-2">弹药: 30</div>
+            <div id="weapon" class="mb-2">武器: 手枪</div>
+            <div id="score" class="mb-2">得分: 0</div>
+        </div>
+        <div id="controls" class="absolute bottom-4 left-4 text-white pixel-font">
+            <div>WASD - 移动</div>
+            <div>鼠标 - 瞄准</div>
+            <div>鼠标左键 - 射击</div>
+        </div>
+        <div id="gameOver" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 text-white text-2xl pixel-font hidden">
+            游戏结束! 点击重新开始
+        </div>
+    </div>
+
+    <div class="menu-icon" onclick="toggleMenu()">
+        ☰
+    </div>
+    <div class="menu-content" id="menuContent">
+        <a href="../index.html">Home</a>
+        <a href="../chatbot/index.html">小洛闻</a>
+        <a href="../imagegenerator/index.html">图片生成</a>
+        <a href="index.html">小游戏</a>
+    </div>
+
+    <script>
+        let menuVisible = false;
+        const menuContent = document.getElementById('menuContent');
+
+        function toggleMenu() {
+            menuVisible = !menuVisible;
+            menuContent.classList.toggle('show');
+        }
+
+        // 点击页面其他地方关闭菜单
+        document.addEventListener('click', function(event) {
+            const menuIcon = document.querySelector('.menu-icon');
+            const isClickInsideMenu = menuContent.contains(event.target);
+            const isClickOnIcon = menuIcon.contains(event.target);
+
+            if (!isClickInsideMenu && !isClickOnIcon && menuVisible) {
+                menuVisible = false;
+                menuContent.classList.remove('show');
+            }
+        });
+
+        // 游戏常量
+        const TILE_SIZE = 32; // 瓦片大小
+        const PLAYER_SIZE = 24; // 玩家尺寸
+        const ZOMBIE_SIZE = 24; // 僵尸尺寸
+        const PLAYER_SPEED = 1.5; // 降低玩家速度
+        const ZOMBIE_SPEED = 0.8; // 降低僵尸速度
+        const ZOMBIE_DETECTION_RANGE = 200; // 僵尸检测范围
+        const BULLET_SPEED = 10; // 子弹速度
+        const MAP_WIDTH = 100; // 地图宽度（瓦片数）
+        const MAP_HEIGHT = 100; // 地图高度（瓦片数）
+        
+        // 获取Canvas和上下文
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 游戏状态
+        let gameState = {
+            player: {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                health: 100,
+                angle: 0,
+                weapon: 'pistol',
+                ammo: 30,
+                items: []
+            },
+            camera: {
+                x: 0,
+                y: 0
+            },
+            zombies: [],
+            bullets: [],
+            items: [],
+            weapons: [
+                { name: 'pistol', damage: 20, fireRate: 500, ammoType: 'pistol', sprite: null },
+                { name: 'shotgun', damage: 40, fireRate: 800, ammoType: 'shotgun', sprite: null },
+                { name: 'rifle', damage: 60, fireRate: 200, ammoType: 'rifle', sprite: null } // 提高步枪伤害到60
+            ],
+            keys: {
+                w: false,
+                a: false,
+                s: false,
+                d: false
+            },
+            mousePosition: { x: 0, y: 0 },
+            lastShot: 0,
+            gameOver: false,
+            score: 0,
+            map: [], // 地图数据
+            mapChunks: new Map() // 存储地图块
+        };
+        
+        // 获取地图块
+        function getMapChunk(chunkX, chunkY) {
+            const key = `${chunkX},${chunkY}`;
+            if (!gameState.mapChunks.has(key)) {
+                // 生成新的地图块
+                const chunk = [];
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    chunk[y] = [];
+                    for (let x = 0; x < MAP_WIDTH; x++) {
+                        // 生成中央玩家区域为空旷空间
+                        if (chunkX === 0 && chunkY === 0 && 
+                            x > MAP_WIDTH * 0.3 && x < MAP_WIDTH * 0.7 && 
+                            y > MAP_HEIGHT * 0.3 && y < MAP_HEIGHT * 0.7) {
+                            chunk[y][x] = 0; // 保证玩家区域无墙
+                        } else {
+                            // 随机生成地形
+                            const noise = Math.random();
+                            if (noise < 0.1) {
+                                chunk[y][x] = 1; // 墙
+                            } else {
+                                chunk[y][x] = 0; // 地板
+                            }
+                        }
+                    }
+                }
+                
+                // 确保地图块边缘有墙
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    if (Math.random() < 0.7) { // 70%的概率在边缘生成墙，保留一些通道
+                        chunk[y][0] = 1;
+                        chunk[y][MAP_WIDTH - 1] = 1;
+                    }
+                }
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    if (Math.random() < 0.7) { // 70%的概率在边缘生成墙，保留一些通道
+                        chunk[0][x] = 1;
+                        chunk[MAP_HEIGHT - 1][x] = 1;
+                    }
+                }
+                
+                gameState.mapChunks.set(key, chunk);
+            }
+            return gameState.mapChunks.get(key);
+        }
+        
+        // 修正取模操作以处理负数
+        function positiveModulo(n, m) {
+            return ((n % m) + m) % m;
+        }
+        
+        // 生成僵尸
+        function spawnZombie() {
+            const side = Math.floor(Math.random() * 4); // 0=上, 1=右, 2=下, 3=左
+            let x, y;
+            
+            const screenWidth = canvas.width;
+            const screenHeight = canvas.height;
+            
+            // 在屏幕外围生成僵尸
+            switch(side) {
+                case 0: // 上
+                    x = gameState.camera.x + Math.random() * screenWidth;
+                    y = gameState.camera.y - ZOMBIE_SIZE - 50;
+                    break;
+                case 1: // 右
+                    x = gameState.camera.x + screenWidth + ZOMBIE_SIZE + 50;
+                    y = gameState.camera.y + Math.random() * screenHeight;
+                    break;
+                case 2: // 下
+                    x = gameState.camera.x + Math.random() * screenWidth;
+                    y = gameState.camera.y + screenHeight + ZOMBIE_SIZE + 50;
+                    break;
+                case 3: // 左
+                    x = gameState.camera.x - ZOMBIE_SIZE - 50;
+                    y = gameState.camera.y + Math.random() * screenHeight;
+                    break;
+            }
+            
+            // 检查生成位置是否在墙内
+            const chunkX = Math.floor(x / (MAP_WIDTH * TILE_SIZE));
+            const chunkY = Math.floor(y / (MAP_HEIGHT * TILE_SIZE));
+            const localX = Math.floor(positiveModulo(x, MAP_WIDTH * TILE_SIZE) / TILE_SIZE);
+            const localY = Math.floor(positiveModulo(y, MAP_HEIGHT * TILE_SIZE) / TILE_SIZE);
+            const chunk = getMapChunk(chunkX, chunkY);
+            
+            if (chunk[localY][localX] === 0) {
+                gameState.zombies.push({
+                    x: x,
+                    y: y,
+                    health: 40,
+                    isChasing: false,
+                    angle: 0,
+                    type: Math.random() < 0.2 ? 'fast' : 'normal' // 20%几率生成快速僵尸
+                });
+            }
+        }
+        
+        // 随机生成物品
+        function spawnItems() {
+            const weaponTypes = ['pistol', 'shotgun', 'rifle'];
+            const ammoTypes = ['pistol_ammo', 'shotgun_ammo', 'rifle_ammo'];
+            const healthTypes = ['small_medkit', 'large_medkit'];
+            
+            // 在玩家周围生成物品
+            const spawnRadius = 1000; // 生成半径
+            const itemCount = 30; // 物品数量
+            
+            for (let i = 0; i < itemCount; i++) {
+                // 随机角度和距离
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * spawnRadius;
+                
+                // 计算物品位置
+                const x = gameState.player.x + Math.cos(angle) * distance;
+                const y = gameState.player.y + Math.sin(angle) * distance;
+                
+                // 检查生成位置是否在墙内
+                const chunkX = Math.floor(x / (MAP_WIDTH * TILE_SIZE));
+                const chunkY = Math.floor(y / (MAP_HEIGHT * TILE_SIZE));
+                const localX = Math.floor(positiveModulo(x, MAP_WIDTH * TILE_SIZE) / TILE_SIZE);
+                const localY = Math.floor(positiveModulo(y, MAP_HEIGHT * TILE_SIZE) / TILE_SIZE);
+                const chunk = getMapChunk(chunkX, chunkY);
+                
+                if (chunk[localY][localX] === 0) {
+                    // 随机物品类型
+                    const itemType = Math.random();
+                    let type;
+                    
+                    if (itemType < 0.4) {
+                        // 武器
+                        type = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
+                    } else if (itemType < 0.8) {
+                        // 弹药
+                        type = ammoTypes[Math.floor(Math.random() * ammoTypes.length)];
+                    } else {
+                        // 医疗包
+                        type = healthTypes[Math.floor(Math.random() * healthTypes.length)];
+                    }
+                    
+                    gameState.items.push({
+                        x: x,
+                        y: y,
+                        type: type
+                    });
+                }
+            }
+        }
+        
+        // 周期性生成物品
+        function setupItemGeneration() {
+            if (gameState.itemGenerationInterval) {
+                clearInterval(gameState.itemGenerationInterval);
+            }
+            
+            gameState.itemGenerationInterval = setInterval(() => {
+                if (!gameState.gameOver && gameState.items.length < 50) {
+                    // 在玩家前方远处生成一些新物品
+                    const angle = gameState.player.angle + (Math.random() - 0.5) * Math.PI; // 大致朝向玩家前方
+                    const distance = 800 + Math.random() * 500; // 距离玩家800-1300范围
+                    
+                    const x = gameState.player.x + Math.cos(angle) * distance;
+                    const y = gameState.player.y + Math.sin(angle) * distance;
+                    
+                    // 检查生成位置是否在墙内
+                    const chunkX = Math.floor(x / (MAP_WIDTH * TILE_SIZE));
+                    const chunkY = Math.floor(y / (MAP_HEIGHT * TILE_SIZE));
+                    const localX = Math.floor(positiveModulo(x, MAP_WIDTH * TILE_SIZE) / TILE_SIZE);
+                    const localY = Math.floor(positiveModulo(y, MAP_HEIGHT * TILE_SIZE) / TILE_SIZE);
+                    const chunk = getMapChunk(chunkX, chunkY);
+                    
+                    if (chunk[localY][localX] === 0) {
+                        const itemTypes = ['pistol_ammo', 'shotgun_ammo', 'rifle_ammo', 'small_medkit', 'large_medkit'];
+                        const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                        
+                        gameState.items.push({
+                            x: x,
+                            y: y,
+                            type: type
+                        });
+                    }
+                }
+            }, 5000); // 每5秒生成一次
+        }
+        
+        // 初始化游戏
+        function initGame() {
+            gameState.player.x = canvas.width / 2;
+            gameState.player.y = canvas.height / 2;
+            gameState.player.health = 100;
+            gameState.player.weapon = 'pistol';
+            gameState.player.ammo = 30;
+            gameState.player.items = [];
+            gameState.zombies = [];
+            gameState.bullets = [];
+            gameState.camera.x = 0;
+            gameState.camera.y = 0;
+            gameState.gameOver = false;
+            gameState.score = 0;
+            gameState.mapChunks.clear(); // 清除所有地图块
+            gameState.particles = [];
+            
+            // 预生成玩家周围的地图块
+            const playerChunkX = Math.floor(gameState.player.x / (MAP_WIDTH * TILE_SIZE));
+            const playerChunkY = Math.floor(gameState.player.y / (MAP_HEIGHT * TILE_SIZE));
+            
+            // 预生成3x3的地图块区域
+            for (let y = playerChunkY - 1; y <= playerChunkY + 1; y++) {
+                for (let x = playerChunkX - 1; x <= playerChunkX + 1; x++) {
+                    getMapChunk(x, y);
+                }
+            }
+            
+            // 生成物品
+            spawnItems();
+            
+            // 初始僵尸
+            for (let i = 0; i < 10; i++) {
+                spawnZombie();
+            }
+            
+            // 设置物品生成
+            setupItemGeneration();
+            
+            // 更新UI
+            updateUI();
+            
+            // 每隔一段时间生成新僵尸
+            if (zombieSpawnInterval) clearInterval(zombieSpawnInterval);
+            zombieSpawnInterval = setInterval(() => {
+                if (!gameState.gameOver && gameState.zombies.length < 50) {
+                    spawnZombie();
+                }
+            }, 2000);
+        }
+        
+        // 绘制地图
+        function drawMap() {
+            const camX = Math.floor(gameState.camera.x / (MAP_WIDTH * TILE_SIZE));
+            const camY = Math.floor(gameState.camera.y / (MAP_HEIGHT * TILE_SIZE));
+            
+            // 绘制可见的地图块
+            for (let chunkY = camY - 1; chunkY <= camY + 1; chunkY++) {
+                for (let chunkX = camX - 1; chunkX <= camX + 1; chunkX++) {
+                    const chunk = getMapChunk(chunkX, chunkY);
+                    
+                    for (let y = 0; y < MAP_HEIGHT; y++) {
+                        for (let x = 0; x < MAP_WIDTH; x++) {
+                            const worldX = chunkX * MAP_WIDTH * TILE_SIZE + x * TILE_SIZE;
+                            const worldY = chunkY * MAP_HEIGHT * TILE_SIZE + y * TILE_SIZE;
+                            
+                            // 只绘制在屏幕范围内的瓦片
+                            if (
+                                worldX >= gameState.camera.x - TILE_SIZE &&
+                                worldX <= gameState.camera.x + canvas.width + TILE_SIZE &&
+                                worldY >= gameState.camera.y - TILE_SIZE &&
+                                worldY <= gameState.camera.y + canvas.height + TILE_SIZE
+                            ) {
+                                const screenX = worldX - gameState.camera.x;
+                                const screenY = worldY - gameState.camera.y;
+                                
+                                if (chunk[y][x] === 0) {
+                                    // 地板
+                                    ctx.fillStyle = '#222';
+                                    ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                                    
+                                    // 像素风格的地板纹理
+                                    if ((x + y) % 2 === 0) {
+                                        ctx.fillStyle = '#2a2a2a';
+                                        ctx.fillRect(screenX + 2, screenY + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                                    }
+                                } else if (chunk[y][x] === 1) {
+                                    // 墙
+                                    ctx.fillStyle = '#444';
+                                    ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                                    
+                                    // 墙的边框
+                                    ctx.strokeStyle = '#333';
+                                    ctx.lineWidth = 2;
+                                    ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                                    
+                                    // 墙的纹理
+                                    ctx.fillStyle = '#555';
+                                    ctx.fillRect(screenX + 4, screenY + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 绘制玩家
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(
+                gameState.player.x - gameState.camera.x,
+                gameState.player.y - gameState.camera.y
+            );
+            ctx.rotate(gameState.player.angle);
+            
+            // 玩家身体（仰视视角下呈椭圆形）
+            ctx.fillStyle = '#3498db';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, PLAYER_SIZE/2, PLAYER_SIZE/3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 玩家头部
+            ctx.fillStyle = '#2980b9';
+            ctx.beginPath();
+            ctx.arc(0, 0, PLAYER_SIZE/4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 武器
+            ctx.fillStyle = '#222';
+            ctx.fillRect(PLAYER_SIZE/4, -2, PLAYER_SIZE/2, 4);
+            
+            ctx.restore();
+            
+            // 玩家阴影（增强仰视效果）
+            ctx.save();
+            ctx.translate(
+                gameState.player.x - gameState.camera.x,
+                gameState.player.y - gameState.camera.y
+            );
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(0, PLAYER_SIZE/2, PLAYER_SIZE/2, PLAYER_SIZE/4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        
+        // 绘制僵尸
+        function drawZombies() {
+            gameState.zombies.forEach(zombie => {
+                const screenX = zombie.x - gameState.camera.x;
+                const screenY = zombie.y - gameState.camera.y;
+                
+                // 仅绘制屏幕内或附近的僵尸
+                if (
+                    screenX > -ZOMBIE_SIZE && screenX < canvas.width + ZOMBIE_SIZE &&
+                    screenY > -ZOMBIE_SIZE && screenY < canvas.height + ZOMBIE_SIZE
+                ) {
+                    ctx.save();
+                    ctx.translate(screenX, screenY);
+                    
+                    // 僵尸阴影（增强仰视效果）
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.beginPath();
+                    ctx.ellipse(0, ZOMBIE_SIZE/2, ZOMBIE_SIZE/2, ZOMBIE_SIZE/4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.rotate(zombie.angle);
+                    
+                    // 僵尸身体（仰视视角下呈椭圆形）
+                    ctx.fillStyle = zombie.type === 'fast' ? '#e74c3c' : '#27ae60';
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, ZOMBIE_SIZE/2, ZOMBIE_SIZE/3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 僵尸头部
+                    ctx.fillStyle = zombie.type === 'fast' ? '#c0392b' : '#218c54';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ZOMBIE_SIZE/4, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 如果僵尸在追逐状态，绘制一个指示器
+                    if (zombie.isChasing) {
+                        ctx.fillStyle = '#f1c40f';
+                        ctx.beginPath();
+                        ctx.arc(0, -ZOMBIE_SIZE/3, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.restore();
+                }
+            });
+        }
+        
+        // 绘制子弹
+        function drawBullets() {
+            gameState.bullets.forEach(bullet => {
+                ctx.save();
+                ctx.translate(
+                    bullet.x - gameState.camera.x,
+                    bullet.y - gameState.camera.y
+                );
+                
+                // 子弹轨迹
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-Math.cos(bullet.angle) * 10, -Math.sin(bullet.angle) * 10);
+                ctx.stroke();
+                
+                // 子弹
+                ctx.fillStyle = '#f39c12';
+                ctx.beginPath();
+                ctx.arc(0, 0, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            });
+        }
+        
+        // 绘制物品
+        function drawItems() {
+            gameState.items.forEach(item => {
+                const screenX = item.x - gameState.camera.x;
+                const screenY = item.y - gameState.camera.y;
+                
+                // 仅绘制屏幕内或附近的物品
+                if (
+                    screenX > -TILE_SIZE && screenX < canvas.width + TILE_SIZE &&
+                    screenY > -TILE_SIZE && screenY < canvas.height + TILE_SIZE
+                ) {
+                    ctx.save();
+                    ctx.translate(screenX, screenY);
+                    
+                    // 物品阴影
+                    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    ctx.beginPath();
+                    ctx.ellipse(0, 8, 8, 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 根据物品类型绘制不同的图形
+                    if (item.type === 'pistol') {
+                        ctx.fillStyle = '#3498db';
+                        drawPixelGun(ctx, 0, 0, 12, 8);
+                    } else if (item.type === 'shotgun') {
+                        ctx.fillStyle = '#e67e22';
+                        drawPixelGun(ctx, 0, 0, 16, 6);
+                    } else if (item.type === 'rifle') {
+                        ctx.fillStyle = '#9b59b6';
+                        drawPixelGun(ctx, 0, 0, 20, 4);
+                    } else if (item.type.includes('_ammo')) {
+                        ctx.fillStyle = '#f1c40f';
+                        drawPixelAmmo(ctx, 0, 0, 8, 12);
+                    } else if (item.type.includes('medkit')) {
+                        ctx.fillStyle = '#e74c3c';
+                        drawPixelMedkit(ctx, 0, 0, 10, 10);
+                    }
+                    
+                    // 物品浮动动画
+                    const floatOffset = Math.sin(Date.now() / 300) * 2;
+                    ctx.translate(0, floatOffset);
+                    
+                    ctx.restore();
+                }
+            });
+        }
+        
+        // 绘制像素风格的枪
+        function drawPixelGun(ctx, x, y, width, height) {
+            ctx.fillRect(x - width/2, y - height/2, width, height);
+            ctx.fillRect(x - width/4, y - height, width/2, height/2);
+        }
+        
+        // 绘制像素风格的弹药
+        function drawPixelAmmo(ctx, x, y, width, height) {
+            ctx.fillRect(x - width/2, y - height/2, width, height);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x - width/4, y - height/4, width/2, height/2);
+        }
+        
+        // 绘制像素风格的医疗包
+        function drawPixelMedkit(ctx, x, y, width, height) {
+            ctx.fillRect(x - width/2, y - height/2, width, height);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x - width/4, y - 1, width/2, 2);
+            ctx.fillRect(x - 1, y - height/4, 2, width/2);
+        }
+        
+        // 更新UI
+        function updateUI() {
+            document.getElementById('health').textContent = `生命值: ${gameState.player.health}`;
+            document.getElementById('ammo').textContent = `弹药: ${gameState.player.ammo}`;
+            document.getElementById('weapon').textContent = `武器: ${translateWeapon(gameState.player.weapon)}`;
+            document.getElementById('score').textContent = `得分: ${gameState.score}`;
+        }
+        
+        // 翻译武器名称
+        function translateWeapon(weapon) {
+            switch(weapon) {
+                case 'pistol': return '手枪';
+                case 'shotgun': return '霰弹枪';
+                case 'rifle': return '步枪';
+                default: return weapon;
+            }
+        }
+        
+        // 检测玩家与物品碰撞
+        function checkItemCollision() {
+            for (let i = gameState.items.length - 1; i >= 0; i--) {
+                const item = gameState.items[i];
+                const dx = gameState.player.x - item.x;
+                const dy = gameState.player.y - item.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < PLAYER_SIZE) {
+                    // 捡起物品
+                    if (item.type.includes('_ammo')) {
+                        // 增加弹药
+                        gameState.player.ammo += 20;
+                        addFloatingText(item.x, item.y, "+20 弹药", "#f1c40f");
+                    } else if (item.type === 'small_medkit') {
+                        // 小型医疗包
+                        const healAmount = Math.min(gameState.player.health + 25, 100) - gameState.player.health;
+                        gameState.player.health = Math.min(gameState.player.health + 25, 100);
+                        addFloatingText(item.x, item.y, "+" + healAmount + " 生命", "#e74c3c");
+                    } else if (item.type === 'large_medkit') {
+                        // 大型医疗包
+                        const healAmount = 100 - gameState.player.health;
+                        gameState.player.health = 100;
+                        addFloatingText(item.x, item.y, "+" + healAmount + " 生命", "#e74c3c");
+                    } else {
+                        // 武器
+                        gameState.player.weapon = item.type;
+                        addFloatingText(item.x, item.y, "获得 " + translateWeapon(item.type), "#3498db");
+                    }
+                    
+                    // 更新UI
+                    updateUI();
+                    
+                    // 从地图上移除物品
+                    gameState.items.splice(i, 1);
+                }
+            }
+        }
+        
+        // 添加浮动文字
+        let floatingTexts = [];
+        function addFloatingText(x, y, text, color) {
+            floatingTexts.push({
+                x: x,
+                y: y,
+                text: text,
+                color: color,
+                life: 1.0
+            });
+        }
+        
+        // 绘制浮动文字
+        function drawFloatingTexts() {
+            ctx.textAlign = "center";
+            ctx.font = "12px 'Courier New', monospace";
+            
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const text = floatingTexts[i];
+                ctx.fillStyle = text.color + Math.floor(text.life * 255).toString(16).padStart(2, '0');
+                ctx.fillText(
+                    text.text,
+                    text.x - gameState.camera.x, 
+                    text.y - gameState.camera.y - (1 - text.life) * 30
+                );
+                
+                text.life -= 0.016;
+                if (text.life <= 0) {
+                    floatingTexts.splice(i, 1);
+                }
+            }
+            
+            ctx.textAlign = "left";
+        }
+        
+        // 检测子弹与僵尸碰撞
+        function checkBulletZombieCollision() {
+            for (let i = gameState.bullets.length - 1; i >= 0; i--) {
+                const bullet = gameState.bullets[i];
+                
+                for (let j = gameState.zombies.length - 1; j >= 0; j--) {
+                    const zombie = gameState.zombies[j];
+                    const dx = bullet.x - zombie.x;
+                    const dy = bullet.y - zombie.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < ZOMBIE_SIZE / 2) {
+                        // 子弹命中僵尸
+                        zombie.health -= bullet.damage;
+                        
+                        // 产生击中效果
+                        addHitEffect(bullet.x, bullet.y);
+                        
+                        // 移除子弹
+                        gameState.bullets.splice(i, 1);
+                        
+                        // 检查僵尸是否死亡
+                        if (zombie.health <= 0) {
+                            gameState.zombies.splice(j, 1);
+                            gameState.score += zombie.type === 'fast' ? 20 : 10;
+                            addFloatingText(zombie.x, zombie.y, "+" + (zombie.type === 'fast' ? 20 : 10), "#f1c40f");
+                            updateUI();
+                        }
+                        
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 添加击中效果
+        function addHitEffect(x, y) {
+            // 添加粒子效果或者其他视觉反馈
+            for (let i = 0; i < 5; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 2;
+                gameState.particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 1.0,
+                    color: '#f39c12'
+                });
+            }
+        }
+        
+        // 初始化粒子数组
+        gameState.particles = [];
+        
+        // 更新和绘制粒子
+        function updateAndDrawParticles() {
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                const particle = gameState.particles[i];
+                
+                // 更新粒子位置
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life -= 0.05;
+                
+                // 绘制粒子
+                if (particle.life > 0) {
+                    ctx.fillStyle = particle.color + Math.floor(particle.life * 255).toString(16).padStart(2, '0');
+                    ctx.beginPath();
+                    ctx.arc(
+                        particle.x - gameState.camera.x,
+                        particle.y - gameState.camera.y,
+                        2 * particle.life,
+                        0, Math.PI * 2
+                    );
+                    ctx.fill();
+                } else {
+                    gameState.particles.splice(i, 1);
+                }
+            }
+        }
+        
+        // 检测僵尸与玩家碰撞
+        function checkZombiePlayerCollision() {
+            for (let i = 0; i < gameState.zombies.length; i++) {
+                const zombie = gameState.zombies[i];
+                const dx = gameState.player.x - zombie.x;
+                const dy = gameState.player.y - zombie.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < (PLAYER_SIZE + ZOMBIE_SIZE) / 2) {
+                    // 僵尸攻击玩家
+                    gameState.player.health -= zombie.type === 'fast' ? 2 : 1;
+                    
+                    // 击退效果
+                    const knockbackFactor = 2;
+                    const knockbackX = (dx / distance) * knockbackFactor;
+                    const knockbackY = (dy / distance) * knockbackFactor;
+                    
+                    // 更新玩家位置，考虑碰撞检测
+                    updatePlayerPosition(knockbackX, knockbackY);
+                    
+                    // 更新UI
+                    updateUI();
+                    
+                    // 检查玩家是否死亡
+                    if (gameState.player.health <= 0) {
+                        gameOver();
+                    }
+                }
+            }
+        }
+        
+        // 游戏结束
+        function gameOver() {
+            gameState.gameOver = true;
+            document.getElementById('gameOver').classList.remove('hidden');
+        }
+        
+        // 更新僵尸AI
+        function updateZombies() {
+            gameState.zombies.forEach(zombie => {
+                const dx = gameState.player.x - zombie.x;
+                const dy = gameState.player.y - zombie.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 检查僵尸是否可以看到玩家
+                zombie.isChasing = distance <= ZOMBIE_DETECTION_RANGE;
+                
+                if (zombie.isChasing) {
+                    // 僵尸朝玩家移动
+                    zombie.angle = Math.atan2(dy, dx);
+                    
+                    // 根据僵尸类型设置速度
+                    const speed = zombie.type === 'fast' ? ZOMBIE_SPEED * 1.5 : ZOMBIE_SPEED;
+                    
+                    const moveX = Math.cos(zombie.angle) * speed;
+                    const moveY = Math.sin(zombie.angle) * speed;
+                    
+                    // 更新僵尸位置前检查碰撞
+                    const newZombieX = zombie.x + moveX;
+                    const newZombieY = zombie.y + moveY;
+                    
+                    // 分别处理X和Y方向的移动，避免卡墙
+                    updateZombiePosition(zombie, moveX, 0);
+                    updateZombiePosition(zombie, 0, moveY);
+                }
+            });
+        }
+        
+        // 更新僵尸位置（考虑碰撞）
+        function updateZombiePosition(zombie, dx, dy) {
+            const newX = zombie.x + dx;
+            const newY = zombie.y + dy;
+            
+            // 计算所在的地图块
+            const chunkX = Math.floor(newX / (MAP_WIDTH * TILE_SIZE));
+            const chunkY = Math.floor(newY / (MAP_HEIGHT * TILE_SIZE));
+            
+            // 计算在地图块内的相对位置
+            const localX = Math.floor(positiveModulo(newX, MAP_WIDTH * TILE_SIZE) / TILE_SIZE);
+            const localY = Math.floor(positiveModulo(newY, MAP_HEIGHT * TILE_SIZE) / TILE_SIZE);
+            
+            // 获取地图块
+            const chunk = getMapChunk(chunkX, chunkY);
+            
+            // 检查是否与墙碰撞
+            if (chunk[localY][localX] === 0) {
+                zombie.x = newX;
+                zombie.y = newY;
+            }
+        }
+        
+        // 更新子弹
+        function updateBullets() {
+            for (let i = gameState.bullets.length - 1; i >= 0; i--) {
+                const bullet = gameState.bullets[i];
+                
+                // 更新子弹位置
+                bullet.x += Math.cos(bullet.angle) * BULLET_SPEED;
+                bullet.y += Math.sin(bullet.angle) * BULLET_SPEED;
+                
+                // 检查子弹是否命中墙壁
+                const worldX = bullet.x;
+                const worldY = bullet.y;
+                
+                // 计算所在的地图块
+                const chunkX = Math.floor(worldX / (MAP_WIDTH * TILE_SIZE));
+                const chunkY = Math.floor(worldY / (MAP_HEIGHT * TILE_SIZE));
+                
+                // 计算在地图块内的相对位置
+                const localX = Math.floor(positiveModulo(worldX, MAP_WIDTH * TILE_SIZE) / TILE_SIZE);
+                const localY = Math.floor(positiveModulo(worldY, MAP_HEIGHT * TILE_SIZE) / TILE_SIZE);
+                
+                // 获取地图块
+                const chunk = getMapChunk(chunkX, chunkY);
+                
+                // 检查是否与墙碰撞
+                if (chunk[localY][localX] === 1) {
+                    // 子弹击中墙壁效果
+                    addHitEffect(bullet.x, bullet.y);
+                    gameState.bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // 移除飞行太远的子弹
+                bullet.distance += BULLET_SPEED;
+                if (bullet.distance > 800) {
+                    gameState.bullets.splice(i, 1);
+                }
+            }
+        }
+        
+        // 开火
+        function shoot() {
+            const now = Date.now();
+            const currentWeapon = gameState.weapons.find(w => w.name === gameState.player.weapon);
+            
+            if (
+                gameState.player.ammo > 0 && 
+                now - gameState.lastShot > currentWeapon.fireRate
+            ) {
+                // 根据武器类型创建不同的射击模式
+                if (currentWeapon.name === 'shotgun') {
+                    // 霰弹枪发射多发子弹
+                    const spreadAngle = 0.3; // 扩散角度
+                    for (let i = -2; i <= 2; i++) {
+                        const angle = gameState.player.angle + (i * spreadAngle / 2);
+                        gameState.bullets.push({
+                            x: gameState.player.x + Math.cos(angle) * (PLAYER_SIZE / 2),
+                            y: gameState.player.y + Math.sin(angle) * (PLAYER_SIZE / 2),
+                            angle: angle,
+                            damage: currentWeapon.damage / 2, // 每颗子弹伤害降低
+                            distance: 0
+                        });
+                    }
+                    
+                    // 霰弹枪只消耗一发弹药
+                    gameState.player.ammo--;
+                } else if (currentWeapon.name === 'rifle') {
+                    // 步枪发射单发高伤害子弹
+                    gameState.bullets.push({
+                        x: gameState.player.x + Math.cos(gameState.player.angle) * (PLAYER_SIZE / 2),
+                        y: gameState.player.y + Math.sin(gameState.player.angle) * (PLAYER_SIZE / 2),
+                        angle: gameState.player.angle,
+                        damage: currentWeapon.damage,
+                        distance: 0
+                    });
+                    
+                    gameState.player.ammo--;
+                } else {
+                    // 默认手枪发射单发子弹
+                    gameState.bullets.push({
+                        x: gameState.player.x + Math.cos(gameState.player.angle) * (PLAYER_SIZE / 2),
+                        y: gameState.player.y + Math.sin(gameState.player.angle) * (PLAYER_SIZE / 2),
+                        angle: gameState.player.angle,
+                        damage: currentWeapon.damage,
+                        distance: 0
+                    });
+                    
+                    gameState.player.ammo--;
+                }
+                
+                // 记录最后射击时间
+                gameState.lastShot = now;
+                
+                // 更新UI
+                updateUI();
+            }
+        }
+        
+        // 更新玩家位置
+        function updatePlayerPosition(dx, dy) {
+            // 尝试更新 X 坐标
+            const newX = gameState.player.x + dx;
+            if (!checkWallCollision(newX, gameState.player.y)) {
+                gameState.player.x = newX;
+            }
+            
+            // 尝试更新 Y 坐标
+            const newY = gameState.player.y + dy;
+            if (!checkWallCollision(gameState.player.x, newY)) {
+                gameState.player.y = newY;
+            }
+            
+            // 更新摄像机位置以跟随玩家
+            gameState.camera.x = gameState.player.x - canvas.width / 2;
+            gameState.camera.y = gameState.player.y - canvas.height / 2;
+        }
+        
+        // 检查墙体碰撞
+        function checkWallCollision(x, y) {
+            // 计算四个角的位置
+            const corners = [
+                { x: x - PLAYER_SIZE / 2, y: y - PLAYER_SIZE / 2 },  // 左上
+                { x: x + PLAYER_SIZE / 2, y: y - PLAYER_SIZE / 2 },  // 右上
+                { x: x - PLAYER_SIZE / 2, y: y + PLAYER_SIZE / 2 },  // 左下
+                { x: x + PLAYER_SIZE / 2, y: y + PLAYER_SIZE / 2 }   // 右下
+            ];
+            
+            // 检查每个角是否与墙碰撞
+            for (let corner of corners) {
+                const worldX = corner.x;
+                const worldY = corner.y;
+                
+                // 计算所在的地图块
+                const chunkX = Math.floor(worldX / (MAP_WIDTH * TILE_SIZE));
+                const chunkY = Math.floor(worldY / (MAP_HEIGHT * TILE_SIZE));
+                
+                // 计算在地图块内的相对位置
+                const localX = Math.floor(positiveModulo(worldX, MAP_WIDTH * TILE_SIZE) / TILE_SIZE);
+                const localY = Math.floor(positiveModulo(worldY, MAP_HEIGHT * TILE_SIZE) / TILE_SIZE);
+                
+                // 获取地图块
+                const chunk = getMapChunk(chunkX, chunkY);
+                
+                // 检查是否与墙碰撞
+                if (chunk[localY][localX] === 1) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // 玩家移动
+        function movePlayer() {
+            let dx = 0;
+            let dy = 0;
+            
+            if (gameState.keys.w) dy -= PLAYER_SPEED;
+            if (gameState.keys.s) dy += PLAYER_SPEED;
+            if (gameState.keys.a) dx -= PLAYER_SPEED;
+            if (gameState.keys.d) dx += PLAYER_SPEED;
+            
+            // 对角线移动速度归一化
+            if (dx !== 0 && dy !== 0) {
+                const length = Math.sqrt(dx * dx + dy * dy);
+                dx = (dx / length) * PLAYER_SPEED;
+                dy = (dy / length) * PLAYER_SPEED;
+            }
+            
+            updatePlayerPosition(dx, dy);
+        }
+        
+        // 主游戏循环
+        function gameLoop() {
+            if (!gameState.gameOver) {
+                // 清除画布
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 更新玩家
+                movePlayer();
+                
+                // 更新僵尸
+                updateZombies();
+                
+                // 更新子弹
+                updateBullets();
+                
+                // 检测碰撞
+                checkItemCollision();
+                checkBulletZombieCollision();
+                checkZombiePlayerCollision();
+                
+                // 绘制地图
+                drawMap();
+                
+                // 绘制物品
+                drawItems();
+                
+                // 绘制子弹
+                drawBullets();
+                
+                // 绘制僵尸
+                drawZombies();
+                
+                // 绘制玩家
+                drawPlayer();
+                
+                // 更新和绘制粒子
+                updateAndDrawParticles();
+                
+                // 绘制浮动文字
+                drawFloatingTexts();
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 事件监听
+        document.addEventListener('keydown', (e) => {
+            switch (e.key.toLowerCase()) {
+                case 'w': gameState.keys.w = true; break;
+                case 'a': gameState.keys.a = true; break;
+                case 's': gameState.keys.s = true; break;
+                case 'd': gameState.keys.d = true; break;
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            switch (e.key.toLowerCase()) {
+                case 'w': gameState.keys.w = false; break;
+                case 'a': gameState.keys.a = false; break;
+                case 's': gameState.keys.s = false; break;
+                case 'd': gameState.keys.d = false; break;
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            gameState.mousePosition.x = e.clientX - rect.left;
+            gameState.mousePosition.y = e.clientY - rect.top;
+            
+            // 计算玩家朝向角度
+            const dx = gameState.mousePosition.x - (gameState.player.x - gameState.camera.x);
+            const dy = gameState.mousePosition.y - (gameState.player.y - gameState.camera.y);
+            gameState.player.angle = Math.atan2(dy, dx);
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // 左键
+                if (gameState.gameOver) {
+                    // 重新开始游戏
+                    document.getElementById('gameOver').classList.add('hidden');
+                    initGame();
+                } else {
+                    // 射击
+                    shoot();
+                }
+            }
+        });
+        
+        // 自动射击（长按鼠标左键）
+        let autoShootInterval;
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && !gameState.gameOver) { // 左键且游戏未结束
+                if (autoShootInterval) clearInterval(autoShootInterval);
+                autoShootInterval = setInterval(shoot, 50);
+            }
+        });
+        
+        document.addEventListener('mouseup', (e) => {
+            if (e.button === 0) { // 左键
+                if (autoShootInterval) {
+                    clearInterval(autoShootInterval);
+                    autoShootInterval = null;
+                }
+            }
+        });
+        
+        // 定时生成僵尸
+        let zombieSpawnInterval;
+        
+        // 初始化游戏
+        initGame();
+        
+        // 开始游戏循环
+        gameLoop();
+    </script>
+</body>
+</html>

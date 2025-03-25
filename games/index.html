@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小游戏 - Jason's Website</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .menu-icon {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+        }
+
+        .menu-icon:hover {
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .menu-content {
+            display: none;
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .menu-content.show {
+            display: block;
+        }
+
+        .menu-content a {
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        .menu-content a:hover {
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+
+        .game-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-gradient-to-r from-green-600 to-blue-600 text-white p-6 shadow-lg">
+        <div class="container mx-auto flex items-center">
+            <div class="menu-icon" onclick="toggleMenu()">
+                ☰
+            </div>
+            <div class="menu-content" id="menuContent">
+                <a href="../index.html">Home</a>
+                <a href="../chatbot/index.html">小洛闻</a>
+                <a href="../imagegenerator/index.html">图片生成</a>
+            </div>
+            <h1 class="text-3xl font-bold">小游戏</h1>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-6 mt-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- 俄罗斯方块 -->
+            <div class="game-card bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="aspect-w-16 aspect-h-9 bg-gray-200">
+                    <img src="rlsfk.png" alt="俄罗斯方块" class="object-cover w-full h-full">
+                </div>
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-2">俄罗斯方块</h2>
+                    <p class="text-gray-600 mb-4">经典的俄罗斯方块游戏，考验你的反应能力和空间思维。</p>
+                    <a href="rlsfk.html" class="inline-block bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+                        开始游戏
+                    </a>
+                </div>
+            </div>
+
+            <!-- 僵尸围城 -->
+            <div class="game-card bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="aspect-w-16 aspect-h-9 bg-gray-200">
+                    <img src="zoombie.png" alt="僵尸围城" class="object-cover w-full h-full">
+                </div>
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-2">僵尸围城</h2>
+                    <p class="text-gray-600 mb-4">在僵尸横行的世界中生存，使用各种武器对抗僵尸大军。</p>
+                    <a href="zoombie.html" class="inline-block bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+                        开始游戏
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 贪吃蛇 -->
+            <div class="game-card bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="aspect-w-16 aspect-h-9 bg-gray-200">
+                    <img src="snake.png" alt="贪吃蛇" class="object-cover w-full h-full">
+                </div>
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-2">贪吃蛇</h2>
+                    <p class="text-gray-600 mb-4">控制蛇吃食物不断成长，小心别撞到自己或墙壁！</p>
+                    <a href="snake.html" class="inline-block bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+                        开始游戏
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white p-6 mt-12">
+        <div class="container mx-auto text-center">
+            <p>© JasonWest</p>
+        </div>
+    </footer>
+
+    <script>
+        let menuVisible = false;
+        const menuContent = document.getElementById('menuContent');
+
+        function toggleMenu() {
+            menuVisible = !menuVisible;
+            menuContent.classList.toggle('show');
+        }
+
+        // 点击页面其他地方关闭菜单
+        document.addEventListener('click', function(event) {
+            const menuIcon = document.querySelector('.menu-icon');
+            const isClickInsideMenu = menuContent.contains(event.target);
+            const isClickOnIcon = menuIcon.contains(event.target);
+
+            if (!isClickInsideMenu && !isClickOnIcon && menuVisible) {
+                menuVisible = false;
+                menuContent.classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html> 
