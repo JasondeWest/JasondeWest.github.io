@@ -6,10 +6,65 @@
     <title>Jason's Image Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .menu-icon {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+        }
+
+        .menu-icon:hover {
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .menu-content {
+            display: none;
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .menu-content.show {
+            display: block;
+        }
+
+        .menu-content a {
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        .menu-content a:hover {
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <header class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 shadow-lg">
-        <div class="container mx-auto">
+        <div class="container mx-auto flex items-center">
+            <div class="menu-icon" onclick="toggleMenu()">
+                ☰
+            </div>
+            <div class="menu-content" id="menuContent">
+                <a href="../index.html">Home</a>
+                <a href="../chatbot/index.html">小洛闻</a>
+            </div>
             <h1 class="text-3xl font-bold">Jason's Image Generator</h1>
         </div>
     </header>
@@ -61,6 +116,27 @@
         </div>
     </footer>
 
+    <script>
+        let menuVisible = false;
+        const menuContent = document.getElementById('menuContent');
+
+        function toggleMenu() {
+            menuVisible = !menuVisible;
+            menuContent.classList.toggle('show');
+        }
+
+        // 点击页面其他地方关闭菜单
+        document.addEventListener('click', function(event) {
+            const menuIcon = document.querySelector('.menu-icon');
+            const isClickInsideMenu = menuContent.contains(event.target);
+            const isClickOnIcon = menuIcon.contains(event.target);
+
+            if (!isClickInsideMenu && !isClickOnIcon && menuVisible) {
+                menuVisible = false;
+                menuContent.classList.remove('show');
+            }
+        });
+    </script>
     <script src="js/main.js"></script>
 </body>
 </html>
