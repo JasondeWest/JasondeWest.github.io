@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jason's Image Generator - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-gradient-to-r from-gray-800 to-gray-900 text-white p-6 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-3xl font-bold">Jason's Image Generator - Admin</h1>
+            <a href="index.html" class="bg-white text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100 transition">Back to App</a>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-6 mt-8">
+        <div class="bg-white rounded-xl shadow-md p-8 max-w-2xl mx-auto">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">API Configuration</h2>
+            
+            <form id="apiConfigForm" class="space-y-6">
+                <div>
+                    <label for="apiEndpoint" class="block text-lg font-medium text-gray-700 mb-2">API Endpoint</label>
+                    <input type="url" id="apiEndpoint" name="apiEndpoint" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500" placeholder="https://api.x.ai/v1/images/generations" value="https://api.x.ai/v1/images/generations" required>
+                </div>
+
+                <div>
+                    <label for="apiKey" class="block text-lg font-medium text-gray-700 mb-2">API Key</label>
+                    <input type="password" id="apiKey" name="apiKey" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500" placeholder="Enter your XAI API key" value="xai-YzJuk9Tzu8xdYvlhU1LyrEjy8IWb6zwiUrj20r9Qd2xsbnujLSBRdHnxhHBhQn8sPjhZ7gTetZ3O51Sy" required>
+                    <p class="mt-1 text-sm text-gray-500">Default API key is provided, but you may want to change it for production use.</p>
+                </div>
+                
+                <div>
+                    <label for="modelName" class="block text-lg font-medium text-gray-700 mb-2">Model Name</label>
+                    <input type="text" id="modelName" name="modelName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500" placeholder="Enter model name" value="grok-2-image">
+                    <p class="mt-1 text-sm text-gray-500">Default: grok-2-image</p>
+                </div>
+
+                <div class="flex justify-center">
+                    <button type="submit" class="bg-gradient-to-r from-gray-700 to-gray-900 text-white px-8 py-3 rounded-lg hover:opacity-90 transition text-lg font-medium">Save Configuration</button>
+                </div>
+            </form>
+
+            <div id="statusMessage" class="hidden mt-6 p-4 rounded-lg"></div>
+
+            <div class="mt-12 border-t pt-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Test API Connection</h3>
+                <button id="testApiBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">Test Connection</button>
+                <div id="testResult" class="mt-4 hidden p-4 rounded-lg"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white p-6 mt-12">
+        <div class="container mx-auto text-center">
+            <p>© JasonWest - Admin Panel</p>
+        </div>
+    </footer>
+
+    <script src="js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jason's Image Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 shadow-lg">
+        <div class="container mx-auto">
+            <h1 class="text-3xl font-bold">Jason's Image Generator</h1>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-6 mt-8">
+        <div class="bg-white rounded-xl shadow-md p-8 max-w-4xl mx-auto">
+            <form id="imageForm" class="space-y-6">
+                <div>
+                    <label for="prompt" class="block text-lg font-medium text-gray-700 mb-2">Image Prompt</label>
+                    <textarea id="prompt" name="prompt" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Describe the image you want to generate..." required></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="n" class="block text-lg font-medium text-gray-700 mb-2">Number of Images (1-10)</label>
+                        <input type="number" id="n" name="n" min="1" max="10" value="1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    
+                    <div>
+                        <label for="response_format" class="block text-lg font-medium text-gray-700 mb-2">Response Format</label>
+                        <select id="response_format" name="response_format" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="url">URL</option>
+                            <option value="b64_json">Base64 JSON</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex justify-center">
+                    <button type="submit" class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-lg hover:opacity-90 transition text-lg font-medium">Generate Images</button>
+                </div>
+            </form>
+
+            <div id="loadingIndicator" class="hidden mt-8 text-center">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
+                <p class="mt-4 text-gray-700">Generating your images...</p>
+            </div>
+
+            <div id="errorMessage" class="hidden mt-8 p-4 bg-red-100 text-red-700 rounded-lg"></div>
+
+            <div id="results" class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Generated images will appear here -->
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white p-6 mt-12">
+        <div class="container mx-auto text-center">
+            <p>© JasonWest</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
